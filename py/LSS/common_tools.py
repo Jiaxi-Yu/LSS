@@ -343,43 +343,57 @@ def comp_tileloc(dz):
     return loco,fzo
 
 
-def mknz(fcd,fcr,fout,bs=0.01,zmin=0.01,zmax=1.6,randens=2500.,compmd='ran',wtmd='clus'):
+def mknz(fcd,fcr,fout_tmp,bs=0.01,zmin=0.01,zmax=1.6,randens=2500.,compmd='ran',wtmd='clus',addcatas=None,remove_zerror=None):
     '''
     fcd is the full path to the catalog file in fits format with the data; requires columns Z and WEIGHT
     fcr is the full path to the random catalog meant to occupy the same area as the data; assumed to come from the imaging randoms that have a density of 2500/deg2
-    fout is the full path to the file name
+    fout_tmp is the full path to the nz file name
     bs is the bin width for the n(z) calculation
     zmin is the lower edge of the first bin
     zmax is the upper edge of the last bin
+    addcatas is to compute catastrophics-contaminated nz
     '''
     #cd = distance(om,1-om)
     ranf = fitsio.read_header(fcr,ext=1) #should have originally had 2500/deg2 density, so can convert to area
     area = ranf['NAXIS2']/randens
     print('area is '+str(area))
-    outf = open(fout,'w')
-    outf.write('#area is '+str(area)+'square degrees\n')
-    
-    if compmd == 'ran':
-        ranf = fitsio.read(fcr)
-        area = np.sum(ranf['FRAC_TLOBS_TILES'])/randens
-        outf.write('#effective area is '+str(area)+'square degrees\n')
 
-    df = fitsio.read(fcd)
+    fouts = [fout_tmp]
+    if addcatas is not None:
+        fouts += [f'{fout_tmp[:-4]}_{catas_type}{fout_tmp[-4:]}' for catas_type in addcatas]
+    if remove_zerror is not None:
+        fouts += [f'{fout_tmp[:-4]}_{remove_zerror}{fout_tmp[-4:]}']
 
-    nbin = int((zmax-zmin)*(1+bs/10)/bs)
-    if wtmd == 'clus':
-        #this is what should be used for clustering catalogs because 'WEIGHT' gets renormalized
-        wts = df['WEIGHT_COMP']*df['WEIGHT_SYS']*df['WEIGHT_ZFAIL']
-    zhist = np.histogram(df['Z'],bins=nbin,range=(zmin,zmax),weights=wts)
-    outf.write('#zmid zlow zhigh n(z) Nbin Vol_bin\n')
-    for i in range(0,nbin):
-        zl = zhist[1][i]
-        zh = zhist[1][i+1]
-        zm = (zh+zl)/2.
-        voli = area/(360.*360./np.pi)*4.*np.pi/3.*(dis_dc(zh)**3.-dis_dc(zl)**3.)
-        nbarz =  zhist[0][i]/voli
-        outf.write(str(zm)+' '+str(zl)+' '+str(zh)+' '+str(nbarz)+' '+str(zhist[0][i])+' '+str(voli)+'\n')
-    outf.close()
+    for ind,fout in enumerate(fouts):
+        outf = open(fout,'w')
+        outf.write('#area is '+str(area)+'square degrees\n')
+        
+        if compmd == 'ran':
+            ranf = fitsio.read(fcr)
+            area = np.sum(ranf['FRAC_TLOBS_TILES'])/randens
+            outf.write('#effective area is '+str(area)+'square degrees\n')
+
+        df = fitsio.read(fcd)
+
+        nbin = int((zmax-zmin)*(1+bs/10)/bs)
+        if wtmd == 'clus':
+            #this is what should be used for clustering catalogs because 'WEIGHT' gets renormalized
+            wts = df['WEIGHT_COMP']*df['WEIGHT_SYS']*df['WEIGHT_ZFAIL']
+        
+        if ind ==0:
+            zhist = np.histogram(df['Z'],bins=nbin,range=(zmin,zmax),weights=wts)
+        elif addcatas is not None:
+            zhist = np.histogram(df[f'Z_{addcatas[ind-1]}'],bins=nbin,range=(zmin,zmax),weights=wts)
+
+        outf.write('#zmid zlow zhigh n(z) Nbin Vol_bin\n')
+        for i in range(0,nbin):
+            zl = zhist[1][i]
+            zh = zhist[1][i+1]
+            zm = (zh+zl)/2.
+            voli = area/(360.*360./np.pi)*4.*np.pi/3.*(dis_dc(zh)**3.-dis_dc(zl)**3.)
+            nbarz =  zhist[0][i]/voli
+            outf.write(str(zm)+' '+str(zl)+' '+str(zh)+' '+str(nbarz)+' '+str(zhist[0][i])+' '+str(voli)+'\n')
+        outf.close()
     return True
 
 def mknz_full(fcd,fcr,tp,bs=0.01,zmin=0.01,zmax=1.6,randens=2500.,write='n',md='data',zcol='Z_not4clus',reg=None):

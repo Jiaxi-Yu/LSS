@@ -94,7 +94,8 @@ parser.add_argument("--compmd",help="use altmtl to use PROB_OBS",default='not_al
 parser.add_argument("--add_tlcomp", help="add completeness FRAC_TLOBS_TILES to randoms",default='n')
 parser.add_argument("--add_nt_misspw", help="add WEIGHT_NT_MISSPW in case of PIP weights.",default='n')
 # spectroscopic systematics studies
-parser.add_argument('--catas', help='apply catastrophics in the clean mock which agrees with observations', type=str, default='y')
+parser.add_argument("--addcatas",help="apply catastrophics in the clean mock redshift 'Z', 'realistic' is the observed pattern, 'failures' is the upper limit 1%, slitless is the 5% assumed catastrophics",nargs='*',type=str,choices=['realistic','failures','slitless'],default=None)
+parser.add_argument('--remove_zerror', help='the suffix of redshift column without the redsihft error', type=str, default=None)
 #--use_map_veto _HPmapcut
 
 import logging
@@ -716,7 +717,8 @@ if args.add_nt_misspw == 'y':
     bo = mocktools.do_weight_nt_misspw(fb, ranmin=rm, ranmax=rx, par=args.par, dirout=dirout)
     readdir = dirout
 
-
+if args.remove_zerror == "None":
+    args.remove_zerror = None
 
 
 if args.mkclusdat == 'y':
@@ -737,7 +739,7 @@ if args.mkclusdat == 'y':
 
        #readdir = dirout
     
-    ct.mkclusdat(os.path.join(readdir, args.tracer + notqso), weightileloc, tp=args.tracer, dchi2= None, tsnrcut=0, zmin=mainp.zmin, zmax=mainp.zmax, use_map_veto=args.use_map_veto, subfrac=subfrac, zsplit=zsplit, ismock=True, ccut=args.ccut, addcatas=args.catas, survey=survey) #, return_cat='y', write_cat='n')
+    ct.mkclusdat(os.path.join(readdir, args.tracer + notqso), weightileloc, tp=args.tracer, dchi2= None, tsnrcut=0, zmin=mainp.zmin, zmax=mainp.zmax, use_map_veto=args.use_map_veto, subfrac=subfrac, zsplit=zsplit, ismock=True, ccut=args.ccut, addcatas=args.addcatas, survey=survey, remove_zerror=args.remove_zerror) #, return_cat='y', write_cat='n')
 #    common.write_LSS(clusdat, os.path.join(dirout, args.tracer + notqso + '_clustering.dat.fits'))
 
     ###ct.mkclusdat(os.path.join(readdir, args.tracer + notqso), weightileloc, tp=args.tracer, dchi2= mainp.dchi2, tsnrcut=mainp.tsnrcut, zmin=mainp.zmin, zmax=mainp.zmax, use_map_veto=args.use_map_veto, subfrac=subfrac, zsplit=zsplit, ismock=True, ccut=args.ccut)
@@ -763,6 +765,13 @@ if args.mkclusran == 'y':
     #    nztl.append('')
     
     tsnrcol = 'TSNR2_ELG'
+
+    if args.addcatas is not None:
+        for catas_type in args.addcatas:
+            rcols.append(f'Z_{catas_type}')
+    if args.remove_zerror is not None:
+        rcols.append(f'Z_{args.remove_zerror}')
+
     if args.tracer[:3] == 'BGS':
         fl = os.path.join(readdir, finaltracer) + '_'
         cols_clustering = Table.read(fl.replace('global','dvs_ro')+'clustering.dat.fits').columns
@@ -879,7 +888,7 @@ if args.nz == 'y':
         fcr = fb_nz+'_0_clustering.ran.fits'
         fcd = fb_nz+'_clustering.dat.fits'
         fout = fb_nz+'_nz.txt'
-        common.mknz(fcd,fcr,fout,bs=dz_step,zmin=mainp.zmin,zmax=mainp.zmax,compmd=nzcompmd)
+        common.mknz(fcd,fcr,fout,bs=dz_step,zmin=mainp.zmin,zmax=mainp.zmax,compmd=nzcompmd,addcatas=args.addcatas,remove_zerror=args.remove_zerror)
         common.addnbar(fb_nz, bs=dz_step,zmin=mainp.zmin,zmax=mainp.zmax,P0=P0,nran=nran,par=args.par,compmd=nzcompmd)
 
 

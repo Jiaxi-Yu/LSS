@@ -3693,7 +3693,7 @@ def add_zfail_weight2full(indir,tp='',tsnrcut=80,readpars=False,hpmapcut='_HPmap
 
 
 
-def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=None,ntilecut=0,ccut=None,ebits=None,zmin=0,zmax=6,write_cat='y',splitNS='n',return_cat='n',compmd='ran',kemd='',wsyscol=None,use_map_veto='',subfrac=1,zsplit=None, ismock=False,logger=None,extradir='', addcatas=False, survey='Y1'):
+def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=None,ntilecut=0,ccut=None,ebits=None,zmin=0,zmax=6,write_cat='y',splitNS='n',return_cat='n',compmd='ran',kemd='',wsyscol=None,use_map_veto='',subfrac=1,zsplit=None, ismock=False,logger=None,extradir='',addcatas=None,survey='Y1',remove_zerror=None):
     import LSS.common_tools as common
     from LSS import ssr_tools
     '''
@@ -3703,8 +3703,9 @@ def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=No
     tp is the target type
     dchi2 is the threshold for keeping as a good redshift
     tnsrcut determines where to mask based on the tsnr2 value (defined below per tracer)
-    addcatas is the implementation that adds catastrophics failures
+    addcatas is the type of catastrophics to apply in the mock, could have multiple choices
     survey indicates which catastrophics the scripts implement
+    remove_zerror will add the redshift column without redshift uncertainty in clustering catalogues
     '''
     if write_cat == 'n' and return_cat == 'n':
         print('writing and returning both set to n, this will do nothing so exiting!')
@@ -3802,23 +3803,12 @@ def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=No
     common.printlog('length after cutting to good z '+str(len(ff)),logger)
 
     ################ implement redshift catastrophics ###############################
-    if addcatas == 'y':
-        common.printlog('adding catastrophics in the mock')
-        from catastrophics import *
-
-        # add realistic catastrophics measured from repeated observations
-        ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type='realistic') 
-
-        # add 1% catastrophics which is the upper limit by survey design
-        ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type='failures')
+    if addcatas is not None:
+        common.printlog('adding catastrophics to the mock',logger)
+        from LSS.main.catastrophics import catas_mock
         
-        # add 5% catastrophics which is the expected rate for space missions using slitless spectroscopy
-        ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type='slitless')
-
-        # redshift selection for the real and the catastrophics redshifts
-        selz = ((zmin < ff['Z'])|(zmin < ff['Z_realistic'])|(zmin < ff['Z_failures']))
-        selz&= ((ff['Z'] < zmax)|(ff['Z_realistic'] < zmax)|(ff['Z_failures'] < zmax))
-
+        for catas_type in addcatas:
+            ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type=catas_type) 
 
     ff['WEIGHT'] = np.ones(len(ff))#ff['WEIGHT_ZFAIL']
     if 'WEIGHT_ZFAIL' not in cols:
@@ -3937,9 +3927,13 @@ def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=No
         print('length after cutting to spectype QSO '+str(len(ff)))
 
     #select down to specific columns below and then also split N/S
-    
-    selz = ff['Z'] > zmin
-    selz &= ff['Z'] < zmax
+    selz = (zmin < ff['Z'])&(ff['Z'] < zmax)
+    ## make inclusive redshift selection
+    if addcatas is not None:
+        for catas_type in addcatas:
+            selz |= (zmin < ff[f'Z_{catas_type}'])&(ff[f'Z_{catas_type}'] < zmax)
+    if remove_zerror is not None:
+        selz |= (zmin < ff[f'Z_{remove_zerror}'])&(ff[f'Z_{remove_zerror}'] < zmax)
     ff = ff[selz]
 
 
@@ -3957,6 +3951,12 @@ def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=No
         kl.append('PROB_OBS')
     if 'WEIGHT_NT_MISSPW' in cols:
         kl.append('WEIGHT_NT_MISSPW')
+
+    if addcatas is not None:
+        for catas_type in addcatas:
+            kl.append(f'Z_{catas_type}')
+    if remove_zerror is not None:
+        kl.append(f'Z_{remove_zerror}')
 
     if tp[:3] == 'BGS':
         #ff['flux_r_dered'] = ff['FLUX_R']/ff['MW_TRANSMISSION_R']

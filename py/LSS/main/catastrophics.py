@@ -5,15 +5,19 @@ from scipy.special import erfinv
 
 c = 299792 # speed of light in km/s
 
+# define the lognormal catastrophics with inverse transform sampling
+def lognorm(uniform,lnG_param):
+    return lnG_param[0]-np.exp((erfinv(1-lnG_param[1]*uniform)*lnG_param[2]+lnG_param[3])/lnG_param[4])
+
 # generate dv that represent catastrophics 
 def dv_catas_exp(uni, lnG_param=None, dvcatas=None, dvcatasmax=None):
     ## implement lognormal distribution with inverse transform sampling      
-    lnG = lnG_param[0]-np.exp((erfinv(1-lnG_param[1]*uni)*lnG_param[2]+lnG_param[3])/lnG_param[4])
+    lnG = lognorm(uni,lnG_param)
     ## remove the catastrophics dv that is too small/large or is infinite
     rest      = (lnG<np.log10(dvcatas))|(lnG>np.log10(dvcatasmax))|(~np.isfinite(lnG))
     while np.sum(rest)>0:
-        lnG[rest] = inv_trans(np.random.rand(np.sum(rest))) 
-        rest  = (lnG<np.log10(dvcatas))|(lnG>np.log10(dvcatasmax))|(~np.isfinite(lnG))            
+        lnG[rest] = lognorm(np.random.rand(np.sum(rest)), lnG_param)
+        rest  = (lnG<np.log10(dvcatas))|(lnG>np.log10(dvcatasmax))|(~np.isfinite(lnG))     
     return lnG
 
 # implement catastrophics
@@ -28,13 +32,16 @@ def catas_mock(dd, survey='Y1', tracer='ELG',catas_type='realistic'):
 
     # implement catastrophics dv
     if survey == 'Y1':
-        if tracer == 'ELG':
+        ###########################
+        if (tracer == 'ELG')|(tracer == 'QSO'):
+        #if tracer == 'ELG':
+            #######################
             lnG_param = [3321/500,200/99,243*np.sqrt(2),657,1000]
+            dvcatas   = 1000
+            dvcatasmax= 10**5.65
             ## implement realistic catastrophics measured from repeated observations
             if catas_type == 'realistic':
                 ### ELG Y1 has lnG distribution and z=1.32 catastrophics
-                dvcatas   = 1000
-                dvcatasmax= 10**5.65
                 frac_tot  = 0.26
                 frac_nores= 0.751
                 Nreal     = int(len(dd)*frac_tot/100)
