@@ -416,7 +416,7 @@ def compute_angular_weights(nthreads=8, gpu=False, dtype='f8', tracer='ELG', tra
     return wang
 
 
-def compute_correlation_function(corr_type, edges, distance, nthreads=8, gpu=False, dtype='f8', wang=None, split_randoms_above=30., weight_type='default', tracer='ELG', tracer2=None, recon_dir=None, rec_type=None, njack=120, option=None, mpicomm=None, mpiroot=None, cat_read=None, dat_cat=None, ran_cat=None, rpcut=None, thetacut=None, **kwargs):
+def compute_correlation_function(corr_type, edges, distance, nthreads=8, gpu=False, dtype='f8', wang=None, split_randoms_above=30., weight_type='default', tracer='ELG', tracer2=None, recon_dir=None, rec_type=None, njack=120, option=None, mpicomm=None, mpiroot=None, cat_read=None, dat_cat=None, ran_cat=None, rpcut=None, thetacut=None, catas_type=None, remove_zerror=None, **kwargs):
 
     autocorr = tracer2 is None
     catalog_kwargs = kwargs.copy()
@@ -434,21 +434,21 @@ def compute_correlation_function(corr_type, edges, distance, nthreads=8, gpu=Fal
 
     if mpicomm is None or mpicomm.rank == mpiroot:
 
-        data, randoms = io.read_clustering_positions_weights(distance, name=['data', 'randoms'], recon_dir=recon_dir,rec_type=rec_type, tracer=tracer, option=option, cat_read=cat_read, dat_cat=dat_cat, ran_cat=ran_cat, **catalog_kwargs)
+        data, randoms = io.read_clustering_positions_weights(distance, name=['data', 'randoms'], recon_dir=recon_dir,rec_type=rec_type, tracer=tracer, option=option, cat_read=cat_read, dat_cat=dat_cat, ran_cat=ran_cat, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
 
         if (with_shifted) & (cat_read == None):
             shifted = randoms  # above returned shifted randoms
-            randoms = io.read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer, option=option, **catalog_kwargs)
+            randoms = io.read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
         (data_positions1, data_weights1), (randoms_positions1, randoms_weights1) = io.concatenate_data_randoms(data, randoms, **catalog_kwargs)
         if with_shifted:
             shifted_positions1, shifted_weights1 = io.concatenate_data_randoms(data, shifted, **catalog_kwargs)[1]
         jack_positions = data_positions1
 
         if not autocorr:
-            data, randoms = io.read_clustering_positions_weights(distance, name=['data', 'randoms'], rec_type=rec_type, tracer=tracer2, option=option, **catalog_kwargs)
+            data, randoms = io.read_clustering_positions_weights(distance, name=['data', 'randoms'], rec_type=rec_type, tracer=tracer2, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
             if with_shifted:
                 shifted = randoms
-                randoms = io.read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer2, option=option, **catalog_kwargs)
+                randoms = io.read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer2, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
             (data_positions2, data_weights2), (randoms_positions2, randoms_weights2) = io.concatenate_data_randoms(data, randoms, **catalog_kwargs)
             if with_shifted:
                 shifted_positions2, shifted_weights2 = io.concatenate_data_randoms(data, shifted, **catalog_kwargs)[1]
@@ -548,7 +548,7 @@ def get_edges(corr_type='smu', bin_type='lin'):
     return edges
 
 
-def corr_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n',rec_type=False, weight_type='default', bin_type='lin', njack=0, nrandoms=8, split_randoms_above=10, out_dir='.', option=None, wang=None, rpcut=None, thetacut=None):
+def corr_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n',rec_type=False, weight_type='default', bin_type='lin', njack=0, nrandoms=8, split_randoms_above=10, out_dir='.', option=None, wang=None, rpcut=None, thetacut=None, catas_type=None, remove_zerror=None):
     if tracer2: tracer += '_' + tracer2
     if rec_type: tracer += '_' + rec_type
     if region: tracer += '_' + region
@@ -563,6 +563,10 @@ def corr_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax
         root += '_rpcut{}'.format(rpcut)
     if thetacut is not None:
         root += '_thetacut{}'.format(thetacut)
+    if catas_type is not None:
+        root += '_'+catas_type
+    if remove_zerror is not None:
+        root += '_remove_zerror'
     if file_type == 'npy':
         return os.path.join(out_dir, 'allcounts_{}.npy'.format(root))
     return os.path.join(out_dir, '{}_{}.txt'.format(file_type, root))
@@ -605,6 +609,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--rpcut', help='apply the rp-cut', type=float, default=None)
     parser.add_argument('--thetacut', help='apply the theta-cut (more up-to-date fibre collision correction), standard: 0.05', type=float, default=None)
+    # spectroscopic systematics
+    parser.add_argument('--catas_type', help='types of catastrophics', choices=['realistic','failures','slitless'], type=str, default=None)
+    parser.add_argument('--remove_zerror', help='remove the effect of redshift uncertainty in the mock by switching to another redshift column; use "y" for yes', type=str, default=None)
 
     setup_logging()
     args = parser.parse_args()
@@ -715,7 +722,7 @@ if __name__ == '__main__':
         logger.info('Computing correlation functions {} in regions {} in redshift ranges {}.'.format(args.corr_type, regions, zlims))
 
     for zmin, zmax in zlims:
-        base_file_kwargs = dict(tracer=tracer, tracer2=tracer2, zmin=zmin, zmax=zmax, recon_dir=args.recon_dir,rec_type=args.rec_type, weight_type=args.weight_type, bin_type=args.bin_type, njack=args.njack, nrandoms=args.nran, split_randoms_above=args.split_ran_above, option=option, rpcut=args.rpcut, thetacut=args.thetacut)
+        base_file_kwargs = dict(tracer=tracer, tracer2=tracer2, zmin=zmin, zmax=zmax, recon_dir=args.recon_dir,rec_type=args.rec_type, weight_type=args.weight_type, bin_type=args.bin_type, njack=args.njack, nrandoms=args.nran, split_randoms_above=args.split_ran_above, option=option, rpcut=args.rpcut, thetacut=args.thetacut, catas_type=args.catas_type, remove_zerror=args.remove_zerror)
         for region in regions:
             if args.use_arrays == 'y':
                 if region == "N":
@@ -729,7 +736,7 @@ if __name__ == '__main__':
                     logger.info('Computing correlation function {} in region {} in redshift range {}.'.format(corr_type, region, (zmin, zmax)))
                 edges = get_edges(corr_type=corr_type, bin_type=args.bin_type)
             
-                result, wang = compute_correlation_function(corr_type, edges=edges, distance=distance, nrandoms=args.nran, split_randoms_above=args.split_ran_above, nthreads=nthreads, gpu=gpu, region=region, zlim=(zmin, zmax), maglim=maglims, weight_type=args.weight_type, njack=args.njack, wang=wang, mpicomm=mpicomm, mpiroot=mpiroot, option=option, rpcut=args.rpcut, thetacut=args.thetacut, **catalog_kwargs)
+                result, wang = compute_correlation_function(corr_type, edges=edges, distance=distance, nrandoms=args.nran, split_randoms_above=args.split_ran_above, nthreads=nthreads, gpu=gpu, region=region, zlim=(zmin, zmax), maglim=maglims, weight_type=args.weight_type, njack=args.njack, wang=wang, mpicomm=mpicomm, mpiroot=mpiroot, option=option, rpcut=args.rpcut, thetacut=args.thetacut, catas_type=args.catas_type, remove_zerror=args.remove_zerror, **catalog_kwargs)
                 # Save pair counts
                 if mpicomm is None or mpicomm.rank == mpiroot:
                     result.save(corr_fn(file_type='npy', region=region, out_dir=os.path.join(out_dir, corr_type), **base_file_kwargs))

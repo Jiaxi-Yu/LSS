@@ -4,7 +4,6 @@ python functions to do various useful date processing/manipulation
 import numpy as np
 import glob
 import os
-from random import random
 
 import astropy.io.fits as fits
 from astropy.table import Table,join,unique,vstack,setdiff
@@ -3694,7 +3693,7 @@ def add_zfail_weight2full(indir,tp='',tsnrcut=80,readpars=False,hpmapcut='_HPmap
 
 
 
-def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=None,ntilecut=0,ccut=None,ebits=None,zmin=0,zmax=6,write_cat='y',splitNS='n',return_cat='n',compmd='ran',kemd='',wsyscol=None,use_map_veto='',subfrac=1,zsplit=None, ismock=False,logger=None,extradir=''):
+def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=None,ntilecut=0,ccut=None,ebits=None,zmin=0,zmax=6,write_cat='y',splitNS='n',return_cat='n',compmd='ran',kemd='',wsyscol=None,use_map_veto='',subfrac=1,zsplit=None, ismock=False,logger=None,extradir='', addcatas=False, survey='Y1'):
     import LSS.common_tools as common
     from LSS import ssr_tools
     '''
@@ -3704,7 +3703,8 @@ def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=No
     tp is the target type
     dchi2 is the threshold for keeping as a good redshift
     tnsrcut determines where to mask based on the tsnr2 value (defined below per tracer)
-
+    addcatas is the implementation that adds catastrophics failures
+    survey indicates which catastrophics the scripts implement
     '''
     if write_cat == 'n' and return_cat == 'n':
         print('writing and returning both set to n, this will do nothing so exiting!')
@@ -3800,6 +3800,26 @@ def mkclusdat(fl,weighttileloc=True,zmask=False,tp='',dchi2=9,tsnrcut=80,rcut=No
         
     ff = ff[wz]
     common.printlog('length after cutting to good z '+str(len(ff)),logger)
+
+    ################ implement redshift catastrophics ###############################
+    if addcatas == 'y':
+        common.printlog('adding catastrophics in the mock')
+        from catastrophics import *
+
+        # add realistic catastrophics measured from repeated observations
+        ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type='realistic') 
+
+        # add 1% catastrophics which is the upper limit by survey design
+        ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type='failures')
+        
+        # add 5% catastrophics which is the expected rate for space missions using slitless spectroscopy
+        ff = catas_mock(ff, survey=survey, tracer=tp[:3], catas_type='slitless')
+
+        # redshift selection for the real and the catastrophics redshifts
+        selz = ((zmin < ff['Z'])|(zmin < ff['Z_realistic'])|(zmin < ff['Z_failures']))
+        selz&= ((ff['Z'] < zmax)|(ff['Z_realistic'] < zmax)|(ff['Z_failures'] < zmax))
+
+
     ff['WEIGHT'] = np.ones(len(ff))#ff['WEIGHT_ZFAIL']
     if 'WEIGHT_ZFAIL' not in cols:
         ff['WEIGHT_ZFAIL'] = np.ones(len(ff))

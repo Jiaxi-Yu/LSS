@@ -53,7 +53,7 @@ def barrier_idle(mpicomm, tag=0, sleep=0.01):
         mask <<= 1
 
 
-def compute_power_spectrum(edges, distance, dtype='f8', wang=None, weight_type='default', tracer='ELG', tracer2=None, recon_dir=None, rec_type=None, ells=(0, 2, 4), boxsize=5000., cellsize=6.,nmesh=None, dowin=False, mpicomm=None, mpiroot=0, thetacut=None, **kwargs):
+def compute_power_spectrum(edges, distance, dtype='f8', wang=None, weight_type='default', tracer='ELG', tracer2=None, recon_dir=None, rec_type=None, ells=(0, 2, 4), boxsize=5000., cellsize=6.,nmesh=None, dowin=False, mpicomm=None, mpiroot=0, thetacut=None, catas_type=None, remove_zerror=None, **kwargs):
 
     autocorr = tracer2 is None
     catalog_kwargs = kwargs.copy()
@@ -79,19 +79,19 @@ def compute_power_spectrum(edges, distance, dtype='f8', wang=None, weight_type='
 
     if mpicomm.rank == mpiroot:
 
-        data, randoms = read_clustering_positions_weights(distance, name=['data', 'randoms'], recon_dir=recon_dir, rec_type=rec_type, tracer=tracer, option=option, **catalog_kwargs)
+        data, randoms = read_clustering_positions_weights(distance, name=['data', 'randoms'], recon_dir=recon_dir, rec_type=rec_type, tracer=tracer, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
         if with_shifted:
             shifted = randoms  # above returned shifted randoms
-            randoms = read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer, option=option, **catalog_kwargs)
+            randoms = read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
         (data_positions1, data_weights1), (randoms_positions1, randoms_weights1) = concatenate_data_randoms(data, randoms, **catalog_kwargs)
         if with_shifted:
             shifted_positions1, shifted_weights1 = concatenate_data_randoms(data, shifted, **catalog_kwargs)[1]
 
         if not autocorr:
-            data, randoms = read_clustering_positions_weights(distance, name=['data', 'randoms'], rec_type=rec_type, tracer=tracer2, option=option, **catalog_kwargs)
+            data, randoms = read_clustering_positions_weights(distance, name=['data', 'randoms'], rec_type=rec_type, tracer=tracer2, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
             if with_shifted:
                 shifted = randoms
-                randoms = read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer2, option=option, **catalog_kwargs)
+                randoms = read_clustering_positions_weights(distance, name='randoms', rec_type=False, tracer=tracer2, option=option, catas_type=catas_type, remove_zerror=remove_zerror, **catalog_kwargs)
             (data_positions2, data_weights2), (randoms_positions2, randoms_weights2) = concatenate_data_randoms(data, randoms, **catalog_kwargs)
             if with_shifted:
                 shifted_positions2, shifted_weights2 = concatenate_data_randoms(data, shifted, **catalog_kwargs)[1]
@@ -151,7 +151,7 @@ def get_edges():
     return {'min': 0., 'step': 0.001}
 
 
-def power_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n', rec_type=False, weight_type='default', bin_type='lin',option=None, thetacut=None, out_dir='.'):
+def power_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n', rec_type=False, weight_type='default', bin_type='lin',option=None, thetacut=None, out_dir='.', catas_type=None, remove_zerror=None):
     if tracer2: tracer += '_' + tracer2
     if rec_type: tracer += '_' + rec_type
     if region: tracer += '_' + region
@@ -163,12 +163,16 @@ def power_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zma
     root = '{}_{}_{}_{}_{}'.format(tracer, zmin, zmax, weight_type, bin_type)
     if thetacut is not None:
         root += '_thetacut{}'.format(thetacut)
+    if catas_type is not None:
+        root += '_'+catas_type
+    if remove_zerror is not None:
+        root += '_remove_zerror'
     if file_type == 'npy':
         return os.path.join(out_dir, 'pkpoles_{}.npy'.format(root))
     return os.path.join(out_dir, '{}_{}.txt'.format(file_type, root))
 
 
-def window_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n', rec_type=False, weight_type='default', bin_type='lin',option=None, thetacut=None, out_dir='.'):
+def window_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n', rec_type=False, weight_type='default', bin_type='lin',option=None, thetacut=None, out_dir='.', catas_type=None, remove_zerror=None):
     if tracer2: tracer += '_' + tracer2
     if rec_type: tracer += '_' + rec_type
     if region: tracer += '_' + region
@@ -180,12 +184,16 @@ def window_fn(file_type='npy', region='', tracer='ELG', tracer2=None, zmin=0, zm
     root = '{}_{}_{}_{}_{}'.format(tracer, zmin, zmax, weight_type, bin_type)
     if thetacut is not None:
         root += '_thetacut{}'.format(thetacut)
+    if catas_type is not None:
+        root += '_'+catas_type
+    if remove_zerror is not None:
+        root += '_zerror'
     if file_type == 'npy':
         return os.path.join(out_dir, 'window_smooth_{}.npy'.format(root))
     return os.path.join(out_dir, '{}_{}.txt'.format(file_type, root))
 
 
-def wmatrix_fn(region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n', rec_type=False, weight_type='default', bin_type='lin',option=None, thetacut=None, out_dir='.'):
+def wmatrix_fn(region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon_dir='n', rec_type=False, weight_type='default', bin_type='lin',option=None, thetacut=None, out_dir='.', catas_type=None, remove_zerror=None):
     if tracer2: tracer += '_' + tracer2
     if rec_type: tracer += '_' + rec_type
     if region: tracer += '_' + region
@@ -197,6 +205,10 @@ def wmatrix_fn(region='', tracer='ELG', tracer2=None, zmin=0, zmax=np.inf, recon
     root = '{}_{}_{}_{}_{}'.format(tracer, zmin, zmax, weight_type, bin_type)
     if thetacut is not None:
         root += '_thetacut{}'.format(thetacut)
+    if catas_type is not None:
+        root += '_'+catas_type
+    if remove_zerror is not None:
+        root += '_remove_zerror'
     return os.path.join(out_dir, 'wmatrix_smooth_{}.npy'.format(root))
 
 
@@ -225,6 +237,9 @@ if __name__ == '__main__':
     parser.add_argument('--recon_dir', help='if recon catalogs are in a subdirectory, put that here', type=str, default='n')
     #only relevant for reconstruction
     parser.add_argument('--rec_type', help='reconstruction algorithm + reconstruction convention', choices=['IFTrecsym', 'IFTreciso', 'MGrecsym', 'MGreciso'], type=str, default=None)
+    # spectroscopic systematics
+    parser.add_argument('--catas_type', help='types of catastrophics', choices=['realistic','failures','slitless'], type=str, default=None)
+    parser.add_argument('--remove_zerror', help='remove the effect of redshift uncertainty in the mock by switching to another redshift column; use "y" for yes', type=str, default=None)
 
     setup_logging()
     args = parser.parse_args()
@@ -299,13 +314,13 @@ if __name__ == '__main__':
         logger.info('Computing power spectrum multipoles in regions {} in redshift ranges {}.'.format(regions, zlims))
 
     for zmin, zmax in zlims:
-        base_file_kwargs = dict(tracer=tracer, tracer2=tracer2, zmin=zmin, zmax=zmax, recon_dir=args.recon_dir, rec_type=args.rec_type, weight_type=args.weight_type, bin_type=bin_type, out_dir=os.path.join(out_dir, 'pk'), thetacut=args.thetacut,option=option)
+        base_file_kwargs = dict(tracer=tracer, tracer2=tracer2, zmin=zmin, zmax=zmax, recon_dir=args.recon_dir, rec_type=args.rec_type, weight_type=args.weight_type, bin_type=bin_type, out_dir=os.path.join(out_dir, 'pk'), thetacut=args.thetacut,option=option, catas_type=args.catas_type, remove_zerror=args.remove_zerror)
         for region in regions:
             if mpicomm.rank == mpiroot:
                 logger.info('Computing power spectrum in region {} in redshift range {}.'.format(region, (zmin, zmax)))
             edges = get_edges()
             wang = None
-            result, wang, window, wmatrix = compute_power_spectrum(edges=edges, distance=distance, nrandoms=args.nran, region=region, zlim=(zmin, zmax), weight_type=args.weight_type, boxsize=args.boxsize, cellsize=args.cellsize,nmesh=args.nmesh, wang=wang, dowin=args.calc_win, thetacut=args.thetacut, mpicomm=mpicomm, mpiroot=mpiroot, **catalog_kwargs)
+            result, wang, window, wmatrix = compute_power_spectrum(edges=edges, distance=distance, nrandoms=args.nran, region=region, zlim=(zmin, zmax), weight_type=args.weight_type, boxsize=args.boxsize, cellsize=args.cellsize,nmesh=args.nmesh, wang=wang, dowin=args.calc_win, thetacut=args.thetacut, mpicomm=mpicomm, mpiroot=mpiroot, catas_type=args.catas_type, remove_zerror=args.remove_zerror, **catalog_kwargs)
             if mpicomm.rank == mpiroot:
                 fn = power_fn(file_type='npy', region=region, **base_file_kwargs)
                 result.save(fn)
