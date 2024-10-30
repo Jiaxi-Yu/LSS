@@ -1,13 +1,13 @@
 import numpy as np
 np.random.seed(20241028)
 import random
-from scipy.special import erfinv
 
 c = 299792 # speed of light in km/s
 
 # define the lognormal catastrophics with inverse transform sampling
 def lognorm(uniform,lnG_param):
-    return lnG_param[0]-np.exp((erfinv(1-lnG_param[1]*uniform)*lnG_param[2]+lnG_param[3])/lnG_param[4])
+    from scipy.special import erfinv
+    return lnG_param[0]-np.exp((erfinv(1-uniform/lnG_param[1])+lnG_param[2])/lnG_param[3])
 
 # generate dv that represent catastrophics 
 def dv_catas_exp(uni, lnG_param=None, dvcatas=None, dvcatasmax=None):
@@ -26,9 +26,13 @@ def catas_mock(dd, survey='Y1', tracer='ELG',catas_type='realistic'):
     dd[f'Z_{catas_type}']= dd['Z'].copy()
 
     if catas_type == 'slitless':
+        ## hypothetical 5% catatrophics
         frac_tot  = 5
         survey    = 'Y1'
         tracer    = 'ELG'
+    elif catas_type == 'failures':
+        ## hypothetical 1% catatrophics
+        frac_tot  = 1   
 
     # implement catastrophics dv
     if survey == 'Y1':
@@ -36,14 +40,14 @@ def catas_mock(dd, survey='Y1', tracer='ELG',catas_type='realistic'):
         if (tracer == 'ELG')|(tracer == 'QSO'):
         #if tracer == 'ELG':
             #######################
-            lnG_param = [3321/500,200/99,243*np.sqrt(2),657,1000]
+            lnG_param = [6.62128,0.495102,1.84552,2.86614]
             dvcatas   = 1000
             dvcatasmax= 10**5.65
             ## implement realistic catastrophics measured from repeated observations
             if catas_type == 'realistic':
                 ### ELG Y1 has lnG distribution and z=1.32 catastrophics
-                frac_tot  = 0.26
-                frac_nores= 0.751
+                frac_tot  = 0.26 # the tocal catastrophics rate
+                frac_nores= 0.751 # the fraction of random failures in the catastropjics
                 Nreal     = int(len(dd)*frac_tot/100)
                 Nrealnores= int(Nreal*frac_nores) if int(Nreal*frac_nores)%2==0 else int(Nreal*frac_nores)-1
                 ### frac_tot% of catastrophics rate
@@ -60,7 +64,7 @@ def catas_mock(dd, survey='Y1', tracer='ELG',catas_type='realistic'):
         else:
             raise ValueError("Catastrophics not available for survey='Y1' but should be available for survey='Y3' ")
     elif survey == 'Y3':
-        raise ValueError("survey='Y3' not ready")        
+        raise ValueError("survey='Y3' catalogues are not ready")        
         if tracer == 'ELG':
             raise ValueError("survey='Y3' not ready")        
         elif tracer == 'LRG':
@@ -72,17 +76,13 @@ def catas_mock(dd, survey='Y1', tracer='ELG',catas_type='realistic'):
     else:
         raise ValueError("'survey' should be Y1, Y3")  
 
-    # implement lognormal-profile failures
-    ## hypothetical 1% catatrophics
-    if catas_type == 'failures':
-        frac_tot  = 1   
-    
-    ## implement the random failures
-    Nfail     = int(len(dd)*frac_tot/100) if int(len(dd)*frac_tot/100)%2==0 else int(len(dd)*frac_tot/100)+1
-    inds      = random.sample(range(0, len(dd)), Nfail)
-    exponent  = dv_catas_exp(np.random.rand(int(Nfail/2)), lnG_param=lnG_param, dvcatas=dvcatas, dvcatasmax=dvcatasmax)
-    dv        = np.append(10**exponent,-10**exponent)
-    random.shuffle(dv)
-    dd[f'Z_{catas_type}'][inds] += dv/c*(1+dd['Z'][inds])    
-    
+    if catas_type != 'realistic':
+        ## implement the random failures
+        Nfail     = int(len(dd)*frac_tot/100) if int(len(dd)*frac_tot/100)%2==0 else int(len(dd)*frac_tot/100)+1
+        inds      = random.sample(range(0, len(dd)), Nfail)
+        exponent  = dv_catas_exp(np.random.rand(int(Nfail/2)), lnG_param=lnG_param, dvcatas=dvcatas, dvcatasmax=dvcatasmax)
+        dv        = np.append(10**exponent,-10**exponent)
+        random.shuffle(dv)
+        dd[f'Z_{catas_type}'][inds] += dv/c*(1+dd['Z'][inds])    
+        
     return dd
