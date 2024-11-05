@@ -611,7 +611,7 @@ if __name__ == '__main__':
     parser.add_argument('--thetacut', help='apply the theta-cut (more up-to-date fibre collision correction), standard: 0.05', type=float, default=None)
     # spectroscopic systematics
     parser.add_argument('--catas_type', help='types of catastrophics', choices=['realistic','failures','slitless'], type=str, default=None)
-    parser.add_argument('--remove_zerror', help='remove the effect of redshift uncertainty in the mock by switching to another redshift column; use "y" for yes', type=str, default=None)
+    parser.add_argument('--remove_zerror', help='the suffix of redshift column without the redsihft error', type=str, default=None)
 
     setup_logging()
     args = parser.parse_args()
@@ -632,6 +632,9 @@ if __name__ == '__main__':
         from pycorr import mpi
         mpicomm = mpi.COMM_WORLD
         mpiroot = 0
+
+    if args.remove_zerror == "None":
+        args.remove_zerror = None
 
     if args.use_arrays == 'y':
         import LSS.main.cattools as ct

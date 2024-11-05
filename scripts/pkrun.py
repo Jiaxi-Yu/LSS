@@ -239,7 +239,7 @@ if __name__ == '__main__':
     parser.add_argument('--rec_type', help='reconstruction algorithm + reconstruction convention', choices=['IFTrecsym', 'IFTreciso', 'MGrecsym', 'MGreciso'], type=str, default=None)
     # spectroscopic systematics
     parser.add_argument('--catas_type', help='types of catastrophics', choices=['realistic','failures','slitless'], type=str, default=None)
-    parser.add_argument('--remove_zerror', help='remove the effect of redshift uncertainty in the mock by switching to another redshift column; use "y" for yes', type=str, default=None)
+    parser.add_argument('--remove_zerror', help='the suffix of redshift column without the redsihft error', type=str, default=None)
 
     setup_logging()
     args = parser.parse_args()
@@ -258,6 +258,9 @@ if __name__ == '__main__':
         args.rebinning = False
     if args.rebinning == 'y':
         args.rebinning = True
+
+    if args.remove_zerror == "None":
+        args.remove_zerror = None
 
     from pypower import mpi
     mpicomm = mpi.COMM_WORLD
