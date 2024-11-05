@@ -162,8 +162,7 @@ def _format_bitweights(bitweights):
 
 
 def get_clustering_positions_weights(catalog, distance, zlim=(0., np.inf),maglim=None, weight_type='default', name='data', return_mask=False, option=None, catas_type=None, remove_zerror=None):
-    print(catas_type,remove_zerror)
-    import sys
+
     # switching to the catastrophics redshift column
     if catas_type is not None:
         catalog.rename_column('Z','Z_raw')
@@ -171,8 +170,6 @@ def get_clustering_positions_weights(catalog, distance, zlim=(0., np.inf),maglim
         catalog.rename_column('WEIGHT_FKP','FKP_raw')        
         catalog.rename_column(f'FKP_{catas_type}','WEIGHT_FKP')
         print('shifted to catastrophics Z and the corresponding WEIGHT_FKP')
-    print(catalog.columns)
-    sys.exit()
     
     # switching to the redshift column without redshift uncertainty
     if remove_zerror is not None:
