@@ -162,6 +162,8 @@ def _format_bitweights(bitweights):
 
 
 def get_clustering_positions_weights(catalog, distance, zlim=(0., np.inf),maglim=None, weight_type='default', name='data', return_mask=False, option=None, catas_type=None, remove_zerror=None):
+    print(catas_type,remove_zerror)
+    import sys
     # switching to the catastrophics redshift column
     if catas_type is not None:
         catalog.rename_column('Z','Z_raw')
@@ -169,13 +171,15 @@ def get_clustering_positions_weights(catalog, distance, zlim=(0., np.inf),maglim
         catalog.rename_column('WEIGHT_FKP','FKP_raw')        
         catalog.rename_column(f'FKP_{catas_type}','WEIGHT_FKP')
         print('shifted to catastrophics Z and the corresponding WEIGHT_FKP')
+    print(catalog.columns)
+    sys.exit()
     
     # switching to the redshift column without redshift uncertainty
     if remove_zerror is not None:
         catalog.rename_column('Z','Z_raw')
-        catalog.rename_column(f'Z_remove_vsmear','Z')
+        catalog.rename_column(f'Z_{remove_zerror}','Z')
         catalog.rename_column('WEIGHT_FKP','FKP_raw')        
-        catalog.rename_column(f'FKP_remove_vsmear','WEIGHT_FKP')
+        catalog.rename_column(f'FKP_{remove_zerror}','WEIGHT_FKP')
         print('shifted to the redshift uncertainty Z and the corresponding WEIGHT_FKP')
 
     if maglim is None:
@@ -386,9 +390,9 @@ def read_clustering_positions_weights(distance, zlim =(0., np.inf), maglim=None,
                                     tab.remove_column('Z')
                                 tab.rename_column('RSDZ', 'Z')    
                         return tab
-                    positions_weights = [get_clustering_positions_weights(_get_tab(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option, catas_type=None, remove_zerror=None) for cat_fn in cat_fns]
+                    positions_weights = [get_clustering_positions_weights(_get_tab(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option, catas_type=catas_type, remove_zerror=remove_zerror) for cat_fn in cat_fns]
                 else:
-                    positions_weights = [get_clustering_positions_weights(Table.read(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option, catas_type=None, remove_zerror=None) for cat_fn in cat_fns]
+                    positions_weights = [get_clustering_positions_weights(Table.read(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option, catas_type=catas_type, remove_zerror=remove_zerror) for cat_fn in cat_fns]
                 
                 if isscalar:
                     positions.append(positions_weights[0][0])
@@ -414,7 +418,7 @@ def read_clustering_positions_weights(distance, zlim =(0., np.inf), maglim=None,
                     cat_read = ran_cat
                    
                     
-                positions_weights = [get_clustering_positions_weights(cat_read, distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option, catas_type=None, remove_zerror=None)]
+                positions_weights = [get_clustering_positions_weights(cat_read, distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option, catas_type=catas_type, remove_zerror=remove_zerror)]
                 if name == 'data':
                     positions.append(positions_weights[0][0])
                     weights.append(positions_weights[0][1])
