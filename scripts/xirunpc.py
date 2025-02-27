@@ -743,17 +743,17 @@ if __name__ == '__main__':
         for corr_type in args.corr_type:
             all_regions = regions.copy()
             if mpicomm is None or mpicomm.rank == mpiroot:
-                if 'N' in regions and 'S' in regions:  # let's combine
+                if args.survey.lower() == 'sv3':
                     result = sum([TwoPointCorrelationFunction.load(
                                   corr_fn(file_type='npy', region=region, out_dir=os.path.join(out_dir, corr_type), **base_file_kwargs)).normalize() for region in ['N', 'S']])
                     result.save(corr_fn(file_type='npy', region='NScomb', out_dir=os.path.join(out_dir, corr_type), **base_file_kwargs))
                     all_regions.append('NScomb')
-                if 'NGC' in regions and 'SGC' in regions:  # let's combine
+                else:
                     result = sum([TwoPointCorrelationFunction.load(
                                   corr_fn(file_type='npy', region=region, out_dir=os.path.join(out_dir, corr_type), **base_file_kwargs)).normalize() for region in ['NGC', 'SGC']])
                     result.save(corr_fn(file_type='npy', region='GCcomb', out_dir=os.path.join(out_dir, corr_type), **base_file_kwargs))
                     all_regions.append('GCcomb')
-
+                r"""
                 if args.rebinning:
                     for region in all_regions:
                         txt_kwargs = base_file_kwargs.copy()
@@ -797,3 +797,4 @@ if __name__ == '__main__':
                                 if tracer2 is not None: tracers += ' x ' + tracer2
                                 plt.title('{} {:.2f} < z {:.2f} in {}'.format(tracers, zmin, zmax, region))
                                 plt.show()
+                """

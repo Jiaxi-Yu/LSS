@@ -433,9 +433,10 @@ def get_full_positions_weights(catalog, name='data', weight_type='default', fibe
     weights = np.ones_like(positions[0])
     if 'pip' in weight_type:
         weights = catalog['WEIGHT_NTILE'][mask]
+    """
     if 'FKP' in weight_type:
         weights *= catalog['WEIGHT_FKP_NTILE'][mask]
-
+    """
     if name == 'data' and fibered:
         #if 'default' in weight_type or 'completeness' in weight_type:
         #    weights = get_inverse_probability_weight(_format_bitweights(catalog['BITWEIGHTS'][mask]), **weight_attrs)
@@ -456,8 +457,8 @@ def read_full_positions_weights(name='data', weight_type='default', fibered=Fals
     def read_positions_weights(name):
         positions, weights = [], []
         for reg in region:
-            cat_fn = catalog_fn(ctype='full_HPmapcut', name=name, **kwargs)
-            #cat_fn = catalog_fn(ctype='full', name=name, **kwargs)
+#            cat_fn = catalog_fn(ctype='full_HPmapcut', name=name, **kwargs)
+            cat_fn = catalog_fn(ctype='full', name=name, **kwargs)
             logger.info('Loading {}.'.format(cat_fn))
             if isinstance(cat_fn, (tuple, list)):
                 catalog = vstack([Table.read(fn.replace('PIP/','')) for fn in cat_fn])
