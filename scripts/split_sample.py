@@ -45,5 +45,19 @@ with Pool() as pool:
     pool.map(matching, tasks)
 
 # check how to generate n(z) and FKP again, do it
+## Ashley et al. 2012 didn't do this
+import LSS.common_tools as common    
+dz = 0.02
+zmin = 0.01
+zmax = 1.61
+P0 = 10000
+
+for reg in ["N","S"]:
+    fcr = filename.format(output,gal,reg,'_0','ran')
+    fcd = filename.format(output,gal,reg,'','dat')
+    fout= filename.format(output,gal,reg,'','')[:-17]+'_nz.txt'
+    common.mknz(fcd,fcr,fout,bs=dz,zmin=zmin,zmax=zmax)
+    common.addnbar(filename.format(output,gal,reg,'','')[:-17],bs=dz,zmin=zmin,zmax=zmax,P0=P0)
+
 
 # bash xiSV3edav1_split.sh
