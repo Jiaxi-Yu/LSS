@@ -17,7 +17,7 @@ import logging
 
 import numpy as np
 
-from astropy.table import Table, vstack, join
+from astropy.table import Table, vstack
 from matplotlib import pyplot as plt
 
 from pycorr import TwoPointCorrelationFunction, TwoPointEstimator, KMeansSubsampler, utils, setup_logging
@@ -55,7 +55,7 @@ def get_zlims(tracer, tracer2=None, option=None):
         zlims = [0.4, 0.6, 0.8, 1.1]
 
     if tracer.startswith('ELG'):# or type == 'ELG_HIP':
-        zlims = [0.8, 1.1, 1.6] #[1.5,1.6]
+        zlims = [0.8, 1.1, 1.6]
         if option:
             if option == 'safez':
                 zlims = [0.9, 1.48]
@@ -63,11 +63,10 @@ def get_zlims(tracer, tracer2=None, option=None):
                 logger.warning('extended is no longer a meaningful option')
                 #zlims = [0.8, 1.1, 1.6]
             if 'smallshells' in option:
-                zlims = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6] 
+                zlims = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6]    
 
     if tracer.startswith('QSO'):
-        #zlims = [0.8, 1.1, 1.6, 2.1]
-        zlims = [0.8,2.1]
+        zlims = [0.8, 1.1, 1.6, 2.1]
         if option == 'highz':
             zlims = [2.1, 3.5]
         if option == 'lowz':
@@ -87,7 +86,7 @@ def get_zlims(tracer, tracer2=None, option=None):
 
 
 def get_regions(survey, rec=False):
-    regions = ['NGC', 'SGC']#, '']
+    regions = ['N', 'S']#, '']
     #if survey in ['main', 'DA02']:
     #    regions = ['DN', 'DS', 'N', 'S']
     #    if rec: regions = ['DN', 'N']
@@ -97,56 +96,36 @@ def get_regions(survey, rec=False):
 def select_region(ra, dec, region):
     mask_ra = (ra > 100 - dec)
     mask_ra &= (ra < 280 + dec)
-    #mask = None
     if region == 'DN':
         mask = dec < 32.375
         mask &= mask_ra
     elif region == 'DS':
         mask = dec > -25
         mask &= ~mask_ra
-    elif 'GC' in region:
-        from astropy.coordinates import SkyCoord
-        import astropy.units as u
-        c = SkyCoord(ra* u.deg,dec* u.deg,frame='icrs')
-        gc = c.transform_to('galactic')
-        sel_ngc = gc.b > 0
-        if region == 'NGC':
-            mask = sel_ngc
-        if region == 'SGC':
-            mask = ~sel_ngc        
     else:
-        raise ValueError('Input region must be one of ["DN", "DS","NGC","SGC"].')
+        raise ValueError('Input region must be one of ["DN", "DS"].')
     return mask
 
 
-def catalog_dir(survey='Y1', verspec='iron', version='v1.2', base_dir='/global/cfs/cdirs/desi/survey/catalogs'):
+def catalog_dir(survey='main', verspec='guadalupe', version='test', base_dir='/global/cfs/cdirs/desi/survey/catalogs'):
     return os.path.join(base_dir, survey, 'LSS', verspec, 'LSScats', version)
 
 
 
-def catalog_fn(tracer='ELG', region='', ctype='clustering', name='data', ran_sw='',recon_dir='n',rec_type=False, nrandoms=4, cat_dir=None, survey='Y1', **kwargs):
-    #print(kwargs)
+def catalog_fn(tracer='ELG', region='', ctype='clustering', name='data', ran_sw='',rec_type=False, nrandoms=4, cat_dir=None, survey='main', **kwargs):
     if cat_dir is None:
         cat_dir = catalog_dir(survey=survey, **kwargs)
     #if survey in ['main', 'DA02']:
     #    tracer += 'zdone'
     if 'edav1' in cat_dir:
         cat_dir += ctype
-    #if ctype == 'clustering':
-    #    cat_dir += '/unblinded/'           
-    if 'full' in ctype:# == 'full':
+           
+    if ctype == 'full':
         region = ''
-        cat_dir = cat_dir.replace('/unblinded','')
-        cat_dir = cat_dir.replace('/blinded','')
-        if 'BGS_BRIGHT' in tracer:
-            tracer = 'BGS_BRIGHT'
     dat_or_ran = name[:3]
     if name == 'randoms' and tracer == 'LRG_main' and ctype == 'full':
         tracer = 'LRG'
     if region: region = '_' + region
-    #recon_dir = kwargs['recon_dir']
-    if recon_dir != 'n':
-        tracer = recon_dir+'/'+tracer
     if rec_type:
         dat_or_ran = '{}.{}'.format(rec_type, dat_or_ran)
     if name == 'data':
@@ -161,40 +140,16 @@ def _format_bitweights(bitweights):
 
 
 def get_clustering_positions_weights(catalog, distance, zlim=(0., np.inf),maglim=None, weight_type='default', name='data', return_mask=False, option=None):
+
     if maglim is None:
         mask = (catalog['Z'] >= zlim[0]) & (catalog['Z'] < zlim[1])
     if maglim is not None:
         mask = (catalog['Z'] >= zlim[0]) & (catalog['Z'] < zlim[1]) & (catalog['ABSMAG_R'] >= maglim[0]) & (catalog['ABSMAG_R'] < maglim[1])
-    if 'bitwise' in weight_type and 'default' in weight_type:
-        mask &= (catalog['FRAC_TLOBS_TILES'] != 0)
+
     if option:
-        if 'noNorth' in option:
-            decmask = catalog['DEC'] < 32.375
-            mask &= decmask
-            
-        if 'noDES' in option:
-            from LSS import common_tools as common
-            isDES = common.select_regressis_DES(catalog)
-            mask &= ~isDES
-        
         if 'elgzmask' in option:
             zmask = ((catalog['Z'] >= 1.49) & (catalog['Z'] < 1.52))
             mask &= ~zmask
-
-        if 'elgzcatas' in option:
-            zmask = ((catalog['Z'] >= 1.31) & (catalog['Z'] < 1.33))
-            mask &= ~zmask
-            
-        if 'ntile' in option:
-            if '=' in option:
-                opsp = option.split('=')
-                nt = int(opsp[1])
-                mask &= catalog['NTILE'] == nt
-            if '>' in option:
-                opsp = option.split('>')
-                nt = int(opsp[1])
-                mask &= catalog['NTILE'] >= nt
-
     logger.info('Using {:d} rows for {}.'.format(mask.sum(), name))
     positions = [catalog['RA'][mask], catalog['DEC'][mask], distance(catalog['Z'][mask])]
     weights = np.ones_like(positions[0])
@@ -202,124 +157,35 @@ def get_clustering_positions_weights(catalog, distance, zlim=(0., np.inf),maglim
     if 'completeness_only' in weight_type and 'bitwise' in weight_type:
         raise ValueError('inconsistent choices were put into weight_type')
 
-    #if name == 'data':
-    if 'zfail' in weight_type:
-        weights *= catalog['WEIGHT_ZFAIL'][mask]
-        print('multiplying weights by WEIGHT_ZFAIL')
-    if 'default' in weight_type and 'bitwise' not in weight_type:
-        weights *= catalog['WEIGHT'][mask]
-        print('multiplying weights by WEIGHT')     
-    if 'removeIMSYS' in weight_type:
-        #assumes default already added the rest of the weights and that SYS was used as default weight
-        weights /= catalog['WEIGHT_SYS'][mask]
-        print('dividing weights by WEIGHT_SYS') 
-    #if 'RF' in weight_type:
-    #    weights *= catalog['WEIGHT_RF'][mask]
-    #    print('multiplying weights by WEIGHT_RF')
-    #if 'SN' in weight_type:
-    #    weights *= catalog['WEIGHT_SN'][mask]
-    #    print('multiplying weights by WEIGHT_SN')
-    if 'swapinLIN' in weight_type:
-        #assumes default already added the rest of the weights and that SN was used as default weight
-        weights *=  catalog['WEIGHT_IMLIN'][mask]/catalog['WEIGHT_SN'][mask]
-
-    if 'swapinRF' in weight_type:
-        #assumes default already added the rest of the weights and that SN was used as default weight
-        weights *=  catalog['WEIGHT_RF'][mask]/catalog['WEIGHT_SN'][mask]
-    if 'removeSN' in weight_type:
-        #assumes default already added the rest of the weights and that SN was used as default weight
-        weights /=  catalog['WEIGHT_SN'][mask]
-
-    if 'addRF' in weight_type:
-        #assumes no imaging systematic weights were in default
-        weights *=  catalog['WEIGHT_RF'][mask]
-    if 'addSN' in weight_type:
-        #assumes no imaging systematic weights were in default
-        weights *=  catalog['WEIGHT_SN'][mask]
-    if 'addIMLIN' in weight_type:
-        #assumes no imaging systematic weights were in default
-        weights *=  catalog['WEIGHT_IMLIN'][mask]
-
-    if 'completeness_only' in weight_type:
-        weights = catalog['WEIGHT_COMP'][mask]
-        print('weights set to WEIGHT_COMP')
-    if 'EB' in weight_type:
-        weights *=  catalog['WEIGHT_SYSEB'][mask]
-        print('multiplying weights by WEIGHT_SYSEB')
-    if 'nofail' in weight_type:
-        weights /= catalog['WEIGHT_ZFAIL'][mask]
-        print('dividing weights by WEIGHT_ZFAIL')
-    if 'addGFLUX' in weight_type:
-        weights *= catalog['WEIGHT_FIBERFLUX'][mask]
-        print('multiplying weights by WEIGHT_FIBERFLUX')
-    if 'addSSR' in weight_type:
-        weights *= catalog['WEIGHT_focal'][mask]
-        print('multiplying weights by WEIGHT_focal')
-    if 'FKP' in weight_type:
-        weights *= catalog['WEIGHT_FKP'][mask]
-        print('multiplying weights by WEIGHT_FKP')
-        
-    if name == 'data' and 'bitwise' in weight_type:
-        if 'default' in weight_type:
-            #weights /= catalog['WEIGHT_COMP'][mask]
-            weights = catalog['WEIGHT_SYS'][mask]*catalog['WEIGHT_ZFAIL'][mask]#/(129/(1+128*catalog['PROB_OBS'][mask]))
-            
-
-            #print('dividing weights by WEIGHT_COMP')
-        if 'pip' in weight_type:
-            weights = catalog['WEIGHT'][mask]/catalog['WEIGHT_COMP'][mask]
+    if name == 'data':
+        if 'zfail' in weight_type:
+            weights *= catalog['WEIGHT_ZFAIL'][mask]
+        if 'default' in weight_type and 'bitwise' not in weight_type:
+            weights *= catalog['WEIGHT'][mask]
+        if 'RF' in weight_type:
+            weights *= catalog['WEIGHT_RF'][mask]*catalog['WEIGHT_COMP'][mask]
+        if 'completeness_only' in weight_type:
+            weights = catalog['WEIGHT_COMP'][mask]
+        if 'EB' in weight_type:
+            weights *=  catalog['WEIGHT_SYSEB'][mask]*catalog['WEIGHT_COMP'][mask]   
         if 'FKP' in weight_type:
             weights *= catalog['WEIGHT_FKP'][mask]
-            print('multiplying weights by WEIGHT_FKP')
-
-        weights = _format_bitweights(catalog['BITWEIGHTS'][mask]) + [weights]
-    if name == 'data' and 'IIP' in weight_type:
-        weights = 129/(1+128*catalog['PROB_OBS'][mask])
-        if 'default' in weight_type:
-            #weights /= catalog['WEIGHT_COMP'][mask]
-            weights *= catalog['WEIGHT_SYS'][mask]*catalog['WEIGHT_ZFAIL'][mask]
-        if 'FKP' in weight_type:
-            weights *= catalog['WEIGHT_FKP'][mask]
-            print('multiplying weights by WEIGHT_FKP')
+        if 'bitwise' in weight_type:
+            weights = _format_bitweights(catalog['BITWEIGHTS'][mask]) + [weights]
 
     if name == 'randoms':
-        #if 'default' in weight_type:
-        #    weights *= catalog['WEIGHT'][mask]
-        if 'bitwise' in weight_type:# and 'default' in weight_type:
-            if 'default' in weight_type:
-                weights = np.ones_like(positions[0])#catalog['WEIGHT_SYS'][mask]*catalog['WEIGHT_ZFAIL'][mask]
-                logger.info('all random weights set to 1')
-            if 'pip' in weight_type:
-                weights = catalog['WEIGHT'][mask]
-            if 'FKP' in weight_type:
-                weights *= catalog['WEIGHT_FKP'][mask]
-                print('multiplying weights by WEIGHT_FKP')
-
-        if 'IIP' in weight_type and 'default' in weight_type:
-            weights = np.ones_like(positions[0])#catalog['WEIGHT_SYS'][mask]*catalog['WEIGHT_ZFAIL'][mask]
-            logger.info('all random weights set to 1')
-            if 'FKP' in weight_type:
-                weights *= catalog['WEIGHT_FKP'][mask]
-                print('multiplying weights by WEIGHT_FKP')
-
-            #weights /= catalog['FRAC_TLOBS_TILES'][mask]
-            #print('dividing weights by FRAC_TLOBS_TILES')
-#         if 'RF' in weight_type:
-#             weights *= catalog['WEIGHT_RF'][mask]*catalog['WEIGHT_COMP'][mask]
-#         if 'zfail' in weight_type:
-#             weights *= catalog['WEIGHT_ZFAIL'][mask]
-#         if 'completeness_only' in weight_type:
-#             weights = catalog['WEIGHT_COMP'][mask]
-#         if 'EB' in weight_type:
-#             weights *=  catalog['WEIGHT_SYSEB'][mask]*catalog['WEIGHT_COMP'][mask]   
-#         if 'FKP' in weight_type:
-#             weights *= catalog['WEIGHT_FKP'][mask]
-#         if 'nofail' in weight_type:
-#             weights /= catalog['WEIGHT_ZFAIL'][mask]
-#         if 'fluxfail' in weight_type:
-#             weights *= (catalog['WEIGHT_ZFAIL_FIBERFLUX'][mask]/catalog['WEIGHT_ZFAIL'][mask])
-
-
+        if 'default' in weight_type:
+            weights *= catalog['WEIGHT'][mask]
+        if 'RF' in weight_type:
+            weights *= catalog['WEIGHT_RF'][mask]*catalog['WEIGHT_COMP'][mask]
+        if 'zfail' in weight_type:
+            weights *= catalog['WEIGHT_ZFAIL'][mask]
+        if 'completeness_only' in weight_type:
+            weights = catalog['WEIGHT_COMP'][mask]
+        if 'EB' in weight_type:
+            weights *=  catalog['WEIGHT_SYSEB'][mask]*catalog['WEIGHT_COMP'][mask]   
+        if 'FKP' in weight_type:
+            weights *= catalog['WEIGHT_FKP'][mask]
 
     if return_mask:
         return positions, weights, mask
@@ -335,9 +201,8 @@ def _concatenate(arrays):
 
 
 def read_clustering_positions_weights(distance, zlim =(0., np.inf), maglim=None, weight_type='default', name='data', concatenate=False, option=None, region=None, cat_read=None, dat_cat=None, ran_cat=None, **kwargs):
-    #print(kwargs)
-    #if 'GC' in region:
-    if type(region) is not list:
+    
+    if 'GC' in region:
         region = [region]
     
     if cat_read == None:
@@ -345,33 +210,13 @@ def read_clustering_positions_weights(distance, zlim =(0., np.inf), maglim=None,
             positions, weights = [], []
             for reg in region:
                 cat_fns = catalog_fn(ctype='clustering', name=name, region=reg, **kwargs)
-                if name=='data':
-                    cat_full = catalog_fn(ctype='full_HPmapcut', name=name, **kwargs)
-#                    cat_full = catalog_fn(ctype='full', name=name, **kwargs)
                 logger.info('Loading {}.'.format(cat_fns))
                 isscalar = not isinstance(cat_fns, (tuple, list))
    
                 
                 if isscalar:
                     cat_fns = [cat_fns]
-                if name=='data':
-                    def _get_tab(cat_fn):
-                        tab = Table.read(cat_fn)
-                        if 'bitwise' in weight_type:
-                            if 'BITWEIGHTS' in list(tab.dtype.names):
-                                pass
-                            else:   
-                                tab = join(Table.read(cat_fn), Table.read(cat_full)['TARGETID', 'BITWEIGHTS'], keys='TARGETID', join_type='left')
-                        #else:
-                        if option is not None:
-                            if 'RSDZ' in option:
-                                if 'Z' in list(tab.dtype.names):
-                                    tab.remove_column('Z')
-                                tab.rename_column('RSDZ', 'Z')    
-                        return tab
-                    positions_weights = [get_clustering_positions_weights(_get_tab(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option) for cat_fn in cat_fns]
-                else:
-                    positions_weights = [get_clustering_positions_weights(Table.read(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option) for cat_fn in cat_fns]
+                positions_weights = [get_clustering_positions_weights(Table.read(cat_fn), distance, zlim=zlim, maglim=maglim, weight_type=weight_type, name=name, option=option) for cat_fn in cat_fns]
                 
                 if isscalar:
                     positions.append(positions_weights[0][0])
@@ -420,64 +265,38 @@ def get_full_positions_weights(catalog, name='data', weight_type='default', fibe
     from pycorr.twopoint_counter import get_inverse_probability_weight
     if weight_attrs is None: weight_attrs = {}
     mask = np.ones(len(catalog), dtype='?')
-    #if region in ['DS', 'DN']:
-    if region != 'full':
+    if region in ['DS', 'DN']:
         mask &= select_region(catalog['RA'], catalog['DEC'], region)
-    #elif region:
-    #    #mask &= catalog['PHOTSYS'] == region.strip('_')
-    #    mask &= catalog['PHOTSYS'] == region.strip('GC')
-        
+    elif region:
+        mask &= catalog['PHOTSYS'] == region.strip('_')
 
     if fibered: mask &= catalog['LOCATION_ASSIGNED']
     positions = [catalog['RA'][mask], catalog['DEC'][mask], catalog['DEC'][mask]]
-    weights = np.ones_like(positions[0])
-    if 'pip' in weight_type:
-        weights = catalog['WEIGHT_NTILE'][mask]
-    """
-    if 'FKP' in weight_type:
-        weights *= catalog['WEIGHT_FKP_NTILE'][mask]
-    """
     if name == 'data' and fibered:
-        #if 'default' in weight_type or 'completeness' in weight_type:
-        #    weights = get_inverse_probability_weight(_format_bitweights(catalog['BITWEIGHTS'][mask]), **weight_attrs)
+        if 'default' in weight_type or 'completeness' in weight_type:
+            weights = get_inverse_probability_weight(_format_bitweights(catalog['BITWEIGHTS'][mask]), **weight_attrs)
         if 'bitwise' in weight_type:
-            weights = _format_bitweights(catalog['BITWEIGHTS'][mask])+[weights]
-    #else: weights = np.ones_like(positions[0])
+            weights = _format_bitweights(catalog['BITWEIGHTS'][mask])
+    else: weights = np.ones_like(positions[0])
     if return_mask:
         return positions, weights, mask
     return positions, weights
 
 
 def read_full_positions_weights(name='data', weight_type='default', fibered=False, region='', weight_attrs=None, **kwargs):
-    #if 'GC' in region:
-    #    region = [region]
-    if type(region) is not list:
-        region = [region]
 
     def read_positions_weights(name):
         positions, weights = [], []
         for reg in region:
-#            cat_fn = catalog_fn(ctype='full_HPmapcut', name=name, **kwargs)
             cat_fn = catalog_fn(ctype='full', name=name, **kwargs)
             logger.info('Loading {}.'.format(cat_fn))
             if isinstance(cat_fn, (tuple, list)):
                 catalog = vstack([Table.read(fn) for fn in cat_fn])
             else:
                 catalog = Table.read(cat_fn)
-            r"""
-            if isinstance(cat_fn, (tuple, list)):
-                catalog = vstack([Table.read(fn.replace('PIP/','')) for fn in cat_fn])
-            else:
-                catalog = Table.read(cat_fn.replace('PIP/',''))
-            """
             p, w = get_full_positions_weights(catalog, name=name, weight_type=weight_type, fibered=fibered, region=reg, weight_attrs=weight_attrs)
             positions.append(p)
             weights.append(w)
-            if fibered:
-                logger.info('loaded fibered full for '+name + ' for region '+reg)
-            else:
-                logger.info('loaded parent full for '+name+ ' for region '+reg)    
-            logger.info(str(len(p))+' entries')
         return positions, weights
 
     if isinstance(name, (tuple, list)):
